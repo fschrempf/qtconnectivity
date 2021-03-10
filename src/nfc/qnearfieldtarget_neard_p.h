@@ -97,14 +97,15 @@ public:
             return;
         }
 
-        QDBusPendingReply<QVariantMap> reply = m_dbusProperties->GetAll(QStringLiteral("org.neard.Tag"));
-        reply.waitForFinished();
-        if (reply.isError()) {
-            qCWarning(QT_NFC_NEARD) << "Could not get properties of org.neard.Tag dbus interface";
+        QDBusPendingReply<QDBusVariant> replyType = m_dbusProperties->Get(QStringLiteral("org.neard.Tag"),
+                                                                          QStringLiteral("Type"));
+        replyType.waitForFinished();
+        if (replyType.isError()) {
+            qCWarning(QT_NFC_NEARD) << "Could not get type from org.neard.Tag dbus interface";
             return;
         }
 
-        const QString &type = reply.value().value(QStringLiteral("Type")).toString();
+        const QString &type = replyType.value().variant().toString();
         m_type = QNearFieldTarget::ProprietaryTag;
 
         if (type == QStringLiteral("Type 1"))
@@ -117,6 +118,16 @@ public:
             m_type = QNearFieldTarget::NfcTagType4;
 
         qCDebug(QT_NFC_NEARD) << "tag type" << type;
+
+        QDBusPendingReply<QDBusVariant> replyUid = m_dbusProperties->Get(QStringLiteral("org.neard.Tag"),
+                                                                         QStringLiteral("Uid"));
+        replyUid.waitForFinished();
+        if (replyUid.isError())
+            qCWarning(QT_NFC_NEARD) << "Could not get uid from org.neard.Tag dbus interface";
+        else {
+            m_uid = replyUid.value().variant().toByteArray();
+            qCDebug(QT_NFC_NEARD) << "tag uid" << m_uid.toHex();
+        }
 
         QObject::connect(&m_recordPathsCollectedTimer, &QTimer::timeout,
                          this,                         &NearFieldTarget::createNdefMessage);
@@ -139,8 +150,7 @@ public:
 
     QByteArray uid() const
     {
-        return QByteArray(); // TODO figure out a workaround because neard does not offer
-                             // this property
+        return m_uid;
     }
 
     QNearFieldTarget::Type type() const
@@ -408,6 +418,7 @@ protected:
     QTimer m_readErrorTimer;
     QTimer m_delayedWriteTimer;
     QNearFieldTarget::Type m_type;
+    QByteArray m_uid;
     bool m_readRequested;
     QNearFieldTarget::RequestId m_currentReadRequestId;
     QNearFieldTarget::RequestId m_currentWriteRequestId;
